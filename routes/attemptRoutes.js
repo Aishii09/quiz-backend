@@ -49,9 +49,20 @@ router.post("/submit", async (req, res) => {
   }
 
   
+ 
 });
+router.get("/leaderboard", async (req, res) => {
+  try {
+    const leaderboard = await Attempt.find()
+      .populate("student", "name")
+      .sort({ score: -1 });
 
-
+    res.status(200).json(leaderboard);
+  } catch (err) {
+    console.log("LEADERBOARD ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 module.exports = router;
