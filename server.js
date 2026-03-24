@@ -4,10 +4,10 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 
 // Routes
-const authRoutes = require("./routes/authRoutes");
-const quizRoutes = require("./routes/quizRoutes");
-const attemptRoutes = require("./routes/attemptRoutes");
-const adminRoutes = require("./routes/adminRoutes");
+const authRoutes = require("./quiz-backend/routes/authRoutes");
+const quizRoutes = require("./quiz-backend/routes/quizRoutes");
+const attemptRoutes = require("./quiz-backend/routes/attemptRoutes");
+const adminRoutes = require("./quiz-backend/routes/adminRoutes");
 
 dotenv.config();
 const app = express();
