@@ -21,16 +21,7 @@ const userSchema = new mongoose.Schema({
   blocked: {
     type: Boolean,
     default: false
-  },
-
-  // ✅ ADD THESE TWO FIELDS HERE
-  resetToken: {
-    type: String
-  },
-  resetTokenExpiry: {
-    type: Date
   }
-
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", userSchema);
