@@ -1,175 +1,237 @@
-const express = require("express");
-const multer = require("multer");
-const AdminExam = require("../models/AdminExam");
-const Result = require("../models/Result");
-const fs = require("fs");
-const path = require("path");
-const pdfParse = require("pdf-parse");
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+const pdf = require('pdf-parse');
 
 const router = express.Router();
 
-/* ===============================
-   CREATE UPLOAD FOLDER
-================================ */
-const uploadDir = path.join(__dirname, "../uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
-/* ===============================
-   MULTER CONFIG
-================================ */
+// Configure multer storage
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../uploads');
+    
+    // Create uploads folder if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    
     cb(null, uploadDir);
   },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
-  },
-});
-
-const upload = multer({ storage: storage });
-
-/* ===============================
-   PARSE PDF FUNCTION
-================================ */
-const parseMCQs = (text) => {
-  const questions = [];
-  const blocks = text.split(/\n(?=\d+\.)/);
-
-  blocks.forEach((block) => {
-    const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
-
-    if (lines.length < 6) return;
-
-    const questionText = lines[0].replace(/^\d+\.\s*/, "");
-
-    const options = [];
-    let correctLetter = null;
-
-    lines.forEach((line) => {
-      if (line.startsWith("A)"))
-        options.push({ text: line.replace("A)", "").trim(), isCorrect: false });
-      if (line.startsWith("B)"))
-        options.push({ text: line.replace("B)", "").trim(), isCorrect: false });
-      if (line.startsWith("C)"))
-        options.push({ text: line.replace("C)", "").trim(), isCorrect: false });
-      if (line.startsWith("D)"))
-        options.push({ text: line.replace("D)", "").trim(), isCorrect: false });
-
-      if (line.startsWith("Answer:")) {
-        correctLetter = line.replace("Answer:", "").trim();
-      }
-    });
-
-    if (correctLetter && options.length === 4) {
-      const index = ["A", "B", "C", "D"].indexOf(correctLetter);
-      if (index !== -1) options[index].isCorrect = true;
-
-      questions.push({
-        question: questionText,
-        options,
-      });
-    }
-  });
-
-  return questions;
-};
-
-/* ===============================
-   UPLOAD EXAM
-================================ */
-router.post("/upload-exam", upload.single("file"), async (req, res) => {
-  try {
-    const { examType, subject } = req.body;
-
-    if (!examType || !subject || !req.file) {
-      return res.status(400).json({ message: "All fields required" });
-    }
-
-    const filePath = path.join(uploadDir, req.file.filename);
-    const dataBuffer = fs.readFileSync(filePath);
-
-    const pdfData = await pdfParse(dataBuffer);
-
-    const generatedQuestions = parseMCQs(pdfData.text);
-
-    if (generatedQuestions.length === 0) {
-      return res.status(400).json({
-        message: "No valid MCQs found in PDF. Check format.",
-      });
-    }
-
-    const newExam = new AdminExam({
-      examType: examType.toUpperCase(),
-      subject: subject.toLowerCase(),
-      filePath: req.file.filename,
-      questions: generatedQuestions,
-    });
-
-    await newExam.save();
-
-    res.status(201).json({
-      message: `Upload successful. ${generatedQuestions.length} questions saved.`,
-    });
-  } catch (error) {
-    console.error("UPLOAD ERROR:", error);
-    res.status(500).json({ message: error.message });
+  filename: (req, file, cb) => {
+    // Save with original filename
+    const timestamp = Date.now();
+    cb(null, `${timestamp}-${file.originalname}`);
   }
 });
 
-/* ===============================
-   FETCH QUESTIONS
-================================ */
-router.get("/exams/:examType/:subject", async (req, res) => {
-  try {
-    const { examType, subject } = req.params;
+const upload = multer({ storage });
 
-    const exam = await AdminExam.findOne({
-      examType: examType.toUpperCase(),
-      subject: subject.toLowerCase(),
-    }).sort({ createdAt: -1 });
+// Mock database
+let savedResults = [];
+let uploadedPapers = [];
 
-    if (!exam) {
-      return res.status(404).json({ questions: [] });
+// POST: Upload exam PDF
+router.post('/upload-exam', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded.' });
+        }
+
+        const { examType, subject } = req.body;
+
+        if (!examType || !subject) {
+            return res.status(400).json({ 
+                error: 'examType and subject are required.' 
+            });
+        }
+
+        // Extract text from PDF
+        const filePath = req.file.path;
+        const dataBuffer = fs.readFileSync(filePath);
+        const pdfData = await pdf(dataBuffer);
+
+        // Save paper info to database
+        const paperInfo = {
+            id: Date.now(),
+            filename: req.file.filename,
+            filepath: filePath,
+            examType: examType.toUpperCase(),
+            subject: subject.toLowerCase(),
+            filesize: req.file.size,
+            uploadedAt: new Date(),
+            textContent: pdfData.text.substring(0, 500) // Store first 500 chars as preview
+        };
+
+        uploadedPapers.push(paperInfo);
+
+        res.status(200).json({
+            message: 'PDF uploaded and stored successfully.',
+            paper: paperInfo,
+            totalPages: pdfData.numpages
+        });
+
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'An error occurred while uploading the exam.' });
     }
-
-    const shuffled = [...exam.questions].sort(() => 0.5 - Math.random());
-    const limitedQuestions = shuffled.slice(0, 15);
-
-    res.json({ questions: limitedQuestions });
-  } catch (err) {
-    console.error("FETCH ERROR:", err);
-    res.status(500).json({
-      message: "Failed to load questions.",
-    });
-  }
 });
 
-/* ===============================
-   SAVE RESULT
-================================ */
-router.post("/save-result", async (req, res) => {
-  try {
-    const { examType, subject, score, totalQuestions } = req.body;
+// GET: Fetch all uploaded papers
+router.get('/uploaded-papers', async (req, res) => {
+    try {
+        res.status(200).json(uploadedPapers);
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to fetch papers.' });
+    }
+});
 
-    const newResult = new Result({
-      examType,
-      subject,
-      score,
-      totalQuestions,
-    });
+// GET: Fetch papers by exam type and subject
+router.get('/papers/:examType/:subject', async (req, res) => {
+    try {
+        const { examType, subject } = req.params;
 
-    await newResult.save();
+        const papers = uploadedPapers.filter(p => 
+            p.examType === examType.toUpperCase() && 
+            p.subject === subject.toLowerCase()
+        );
 
-    res.status(201).json({
-      message: "Result saved successfully",
-    });
-  } catch (err) {
-    res.status(500).json({
-      message: "Failed to save result",
-    });
-  }
+        if (papers.length === 0) {
+            return res.status(404).json({
+                error: 'No papers found for this exam and subject.',
+                papers: []
+            });
+        }
+
+        res.status(200).json(papers);
+
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to fetch papers.' });
+    }
+});
+
+// POST: Save quiz result
+router.post('/save-result', async (req, res) => {
+    try {
+        const { userId, examType, subject, score, totalQuestions, percentage, answers } = req.body;
+
+        const result = {
+            id: Date.now(),
+            userId: userId || 'anonymous',
+            examType,
+            subject,
+            score,
+            totalQuestions,
+            percentage,
+            answers,
+            createdAt: new Date()
+        };
+
+        savedResults.push(result);
+
+        res.status(200).json({ 
+            message: 'Result saved successfully.',
+            result
+        });
+
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to save result.' });
+    }
+});
+
+// GET: Fetch user's results
+router.get('/results/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const userResults = savedResults.filter(r => r.userId === userId);
+
+        res.status(200).json(userResults);
+
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to fetch results.' });
+    }
+});
+
+// GET: Fetch leaderboard
+router.get('/leaderboard', async (req, res) => {
+    try {
+        const leaderboard = savedResults
+            .reduce((acc, result) => {
+                const existing = acc.find(r => r.userId === result.userId);
+                if (existing) {
+                    if (result.percentage > existing.percentage) {
+                        existing.percentage = result.percentage;
+                        existing.score = result.score;
+                    }
+                    existing.attempts += 1;
+                } else {
+                    acc.push({
+                        rank: 0,
+                        name: result.userId,
+                        accuracy: result.percentage + '%',
+                        points: result.score,
+                        attempts: 1
+                    });
+                }
+                return acc;
+            }, [])
+            .sort((a, b) => parseInt(b.accuracy) - parseInt(a.accuracy))
+            .map((item, index) => ({
+                ...item,
+                rank: index + 1
+            }));
+
+        res.status(200).json(leaderboard);
+
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to fetch leaderboard.' });
+    }
+});
+
+// GET: Fetch questions by exam type and subject
+router.get('/exams/:examType/:subject', async (req, res) => {
+    try {
+        const { examType, subject } = req.params;
+
+        // Return sample questions (replace with DB query later)
+        const questions = [
+            {
+                _id: '1',
+                question: "What is the capital of France?",
+                options: [
+                    { text: "Paris", isCorrect: true },
+                    { text: "London", isCorrect: false },
+                    { text: "Berlin", isCorrect: false },
+                    { text: "Madrid", isCorrect: false }
+                ]
+            },
+            {
+                _id: '2',
+                question: "What is 2+2?",
+                options: [
+                    { text: "3", isCorrect: false },
+                    { text: "4", isCorrect: true },
+                    { text: "5", isCorrect: false },
+                    { text: "6", isCorrect: false }
+                ]
+            }
+        ];
+
+        res.status(200).json({
+            examType: examType,
+            subject: subject,
+            questions: questions
+        });
+
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to fetch exams.' });
+    }
 });
 
 module.exports = router;

@@ -3,10 +3,9 @@ const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const quizRoutes = require("./routes/quizRoutes");
-
-// Import routes
 const authRoutes = require("./routes/authRoutes");
-const attemptRoutes = require("./routes/attemptRoutes"); // add this AFTER authRoutes
+const attemptRoutes = require("./routes/attemptRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 dotenv.config();
 const app = express();
@@ -14,12 +13,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Connect to MongoDB
 connectDB();
 
 // Use routes
 app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
-app.use("/api/attempt", attemptRoutes); // use attempt routes
+app.use("/api/attempt", attemptRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Test route
 app.get("/", (req, res) => {
