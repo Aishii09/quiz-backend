@@ -6,6 +6,7 @@ const quizRoutes = require("./routes/quizRoutes");
 const authRoutes = require("./routes/authRoutes");
 const attemptRoutes = require("./routes/attemptRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const mathsRoutes = require("./routes/mathsRoutes");
 
 dotenv.config();
 const app = express();
@@ -21,6 +22,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
 app.use("/api/attempt", attemptRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/maths", mathsRoutes);
 
 // Test route
 app.get("/", (req, res) => {

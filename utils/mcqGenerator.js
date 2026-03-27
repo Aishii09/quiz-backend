@@ -9,11 +9,11 @@ const parseMCQFromText = (rawText) => {
   // Step 2: Remove answer and question number from text
   let cleanText = rawText
     .replace(/Answer:\s*[A-D][\s\d]*/gi, '')
-    .replace(/\s*\d+\s*$/, '')  // Remove trailing question number
+    .replace(/^\d+\.\s*/, '')  // Remove leading question number
     .trim();
   
-  // Step 3: Extract options using improved regex
-  const optionPattern = /([A-D])[\.\)]\s*([^\n]*?)(?=\s*[A-D][\.\)]|$)/gi;
+  // Step 3: Extract options using improved regex for A) B) C) D) format
+  const optionPattern = /([A-D])\)\s*([^\n]*?)(?=\s*[A-D]\)|$)/gi;
   const options = [];
   let match;
   
@@ -29,14 +29,8 @@ const parseMCQFromText = (rawText) => {
   // Step 4: Extract question text (everything before first option)
   let questionText = cleanText;
   if (options.length > 0) {
-    const firstOptionPatterns = [
-      cleanText.indexOf(options[0].letter + ')'),
-      cleanText.indexOf(options[0].letter + '.'),
-      cleanText.indexOf(options[0].letter + ' ')
-    ].filter(idx => idx !== -1);
-    
-    if (firstOptionPatterns.length > 0) {
-      const firstOptionIndex = Math.min(...firstOptionPatterns);
+    const firstOptionIndex = cleanText.search(/[A-D]\)/);
+    if (firstOptionIndex !== -1) {
       questionText = cleanText.substring(0, firstOptionIndex).trim();
     }
   }
@@ -81,76 +75,18 @@ const generateMCQsFromText = (pdfText) => {
     // Try to parse each block as an MCQ
     const parsed = parseMCQFromText(block.trim());
     
-    // Only add if we have valid question and options
-    if (parsed.question && parsed.question.length > 5 && parsed.options.length >= 2) {
+    // Only add if we have valid question and exactly 4 options
+    if (parsed.question && parsed.question.length > 5 && parsed.options.length === 4) {
       mcqs.push({
         question: parsed.question,
-        options: parsed.options,
-        explanation: `The correct answer is ${parsed.correctAnswer}.`
+        options: parsed.options
       });
     }
   });
   
-  // If no questions parsed, fallback to simple sentence-based generation
-  if (mcqs.length < 10) {
-    console.log('Falling back to sentence-based generation');
-    return generateFromSentences(pdfText);
-  }
+  console.log('Valid MCQs parsed:', mcqs.length);
   
-  // Ensure exactly 60 questions
-  while (mcqs.length < 60) {
-    const originalIndex = mcqs.length % Math.max(1, mcqs.length);
-    const original = mcqs[originalIndex];
-    
-    mcqs.push({
-      ...original,
-      question: original.question + ` (Variation ${Math.floor(mcqs.length / Math.max(1, mcqs.length)) + 1})`
-    });
-  }
-  
-  console.log('Generated MCQs count:', mcqs.length);
-  return mcqs.slice(0, 60);
-};
-
-// Fallback: Simple sentence-based generation
-const generateFromSentences = (pdfText) => {
-  const sentences = pdfText.split(/[.!?]+/).filter(s => s.trim().length > 15);
-  console.log('Total sentences found:', sentences.length);
-  
-  if (sentences.length === 0) return [];
-  
-  const mcqs = [];
-  
-  for (let i = 0; i < 60; i++) {
-    const sentenceIndex = i % sentences.length;
-    const questionSentence = sentences[sentenceIndex].trim();
-    
-    const words = questionSentence.split(/\s+/).filter(w => w.length > 3);
-    if (words.length === 0) continue;
-    
-    const mainWord = words[Math.floor(words.length / 2)];
-    
-    const questionText = questionSentence
-      .replace(mainWord, "___________")
-      .replace(/^\s+/, '');
-    
-    const options = [
-      { text: mainWord, isCorrect: true },
-      { text: words[Math.floor(Math.random() * words.length)] || "Alternative A", isCorrect: false },
-      { text: words[Math.floor(Math.random() * words.length)] || "Alternative B", isCorrect: false },
-      { text: "Alternative C", isCorrect: false }
-    ];
-    
-    options.sort(() => Math.random() - 0.5);
-    
-    mcqs.push({
-      question: questionText,
-      options: options,
-      explanation: `The correct answer is "${mainWord}" based on context.`
-    });
-  }
-  
-  console.log('Generated MCQs count (fallback):', mcqs.length);
+  // Return only valid questions (no fallback to sample questions)
   return mcqs;
 };
 
