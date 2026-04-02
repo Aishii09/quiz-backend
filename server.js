@@ -20,7 +20,7 @@ connectDB();
 // Use routes
 app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
-app.use("/api/attempt", attemptRoutes);
+app.use("/api/attempts", attemptRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/maths", mathsRoutes);
 
