@@ -629,11 +629,11 @@ router.get('/:examId', (req, res) => {
         }));
 
         res.json({
-            exam: exam,
-            subject: "maths",
-            questions: shuffledQuestions
-        });
-
+    exam: exam,
+    subject: "maths",
+    totalQuestions: shuffledQuestions.length,
+    questions: shuffledQuestions
+});
     } catch (error) {
         console.error('Error fetching maths questions:', error);
         res.status(500).json({ error: 'Failed to fetch maths questions' });
