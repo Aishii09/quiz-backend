@@ -594,6 +594,15 @@ const allMathsQuestions = [
         ]
     },
     {
+        question: "National Animal",
+        options: [
+            { text: "Tiger", isCorrect: true },
+            { text: "lion", isCorrect: false },
+            { text: "Elephant", isCorrect: false },
+            { text: "Dog", isCorrect: false }
+        ]
+    },
+    {
         question: "The perimeter of a circle with radius 7 is?",
         options: [
             { text: "14π", isCorrect: true },
